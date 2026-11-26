@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upscaler — Real-ESRGAN</title>
+    <meta name="description" content="Upscale images locally with AI-powered Real-ESRGAN">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Batch file list */
+        .file-list {
+            margin-top: 20px;
+            display: none;
+        }
+        .file-list.visible { display: block; }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            transition: var(--transition);
+        }
+        .file-item:hover { border-color: var(--border-hover); }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+        .file-icon {
+            font-size: 0.7rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            background: rgba(108, 92, 231, 0.15);
+            color: var(--accent-secondary);
+        }
+        .file-name {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-size {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .file-status {
+            font-size: 0.8rem;
+            font-weight: 500;
+            flex-shrink: 0;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .file-status.pending {
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.03);
+        }
+        .file-status.processing {
+            color: var(--accent-secondary);
+            background: rgba(108, 92, 231, 0.1);
+            animation: pulse 1.5s ease infinite;
+        }
+        .file-status.done {
+            color: var(--success);
+            background: rgba(0, 210, 160, 0.1);
+        }
+        .file-status.error {
+            color: var(--error);
+            background: rgba(255, 107, 107, 0.1);
+        }
+        .file-remove {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+        .file-remove:hover { color: var(--error); background: rgba(255,107,107,0.1); }
+
+        .batch-summary {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* Cancel button */
+        .btn-cancel {
+            padding: 10px 24px;
+            border: 1px solid rgba(255, 107, 107, 0.4);
+            border-radius: var(--radius-sm);
+            background: rgba(255, 107, 107, 0.1);
+            color: var(--error);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: none;
+        }
+        .btn-cancel.visible { display: inline-block; }
+        .btn-cancel:hover {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: var(--error);
+        }
+
+        /* Progress enhancements */
+        .progress-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .progress-counter {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .progress-counter span {
+            color: var(--accent-secondary);
+        }
+        .progress-pct {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-secondary);
+        }
+        .progress-filename {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-status.cancelled {
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.03);
+        }
+
+        /* Mode selector */
+        .mode-group {
+            display: flex;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .mode-btn {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .mode-btn:hover { color: var(--text-primary); }
+        .mode-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+        .scale-group.hidden { display: none; }
+
+        /* Detail Controls */
+        .detail-controls {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+            padding: 14px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+        .detail-controls.hidden { display: none; }
+        .detail-slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+        .detail-slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .detail-slider {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        /* Result cards grid */
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-top: 32px;
+            display: none;
+        }
+        .results-grid.visible { display: grid; }
+
+        .result-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease;
+        }
+        .result-item-header {
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+        .result-item-header h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .result-item-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .result-item-meta span { white-space: nowrap; }
+
+        /* Magnifier comparison */
+        .comparison-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+            background: var(--border);
+        }
+        .comparison-side {
+            position: relative;
+            background: repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+            overflow: hidden;
+            cursor: none;
+        }
+        .comparison-side img {
+            width: 100%;
+            display: block;
+        }
+        .comparison-tag {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-radius: 4px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .comparison-tag.before {
+            background: rgba(255, 107, 107, 0.8);
+            color: #fff;
+        }
+        .comparison-tag.after {
+            background: rgba(0, 210, 160, 0.8);
+            color: #fff;
+        }
+
+        /* Magnifier lens */
+        .magnifier {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-secondary);
+            box-shadow: 0 0 20px rgba(108, 92, 231, 0.4), inset 0 0 10px rgba(0,0,0,0.3);
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            background-repeat: no-repeat;
+            image-rendering: pixelated;
+        }
+        .comparison-side:hover .magnifier { display: block; }
+
+        .result-actions {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+        }
+        .btn-dl-single {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--success), #00b389);
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+        .btn-dl-single:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(0, 210, 160, 0.25);
+        }
+
+        /* Download all bar */
+        .download-all-bar {
+            margin-top: 20px;
+            display: none;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+        }
+        .download-all-bar.visible { display: flex; }
+        .btn-download-all {
+            padding: 12px 28px;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--accent), #8b7cf8);
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-download-all:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px var(--accent-glow);
+        }
+        .btn-clear {
+            padding: 12px 20px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-clear:hover { border-color: var(--border-hover); color: var(--text-primary); }
+
+        /* Magnifier zoom label */
+        .zoom-label {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            padding: 3px 8px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--accent-secondary);
+            background: rgba(0,0,0,0.6);
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Image Upscaler</h1>
+            <p>Enhance your images with AI — powered by Real-ESRGAN</p>
+        </header>
+
+        <!-- Drop Zone -->
+        <div class="dropzone" id="dropzone">
+            <span class="dropzone-icon">+</span>
+            <div class="dropzone-text">Drag & drop images or <span>browse files</span></div>
+            <div class="dropzone-hint">PNG, JPG, WebP, BMP — Max 20MB each — Multiple files supported</div>
+            <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.webp,.bmp,.tiff" multiple>
+        </div>
+
+        <!-- File List -->
+        <div class="file-list" id="fileList"></div>
+        <div class="batch-summary" id="batchSummary"></div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="mode-group">
+                <button class="mode-btn active" data-mode="upscale" id="modeUpscale">Upscale</button>
+                <button class="mode-btn" data-mode="colorize" id="modeColorize">Colorize</button>
+                <button class="mode-btn" data-mode="both" id="modeBoth">Both</button>
+            </div>
+            <div class="scale-group" id="scaleGroup">
+                <button class="scale-btn" data-scale="2" id="scale2">2x</button>
+                <button class="scale-btn active" data-scale="4" id="scale4">4x</button>
+            </div>
+            <button class="btn-upscale" id="btnUpscale">Upscale</button>
+            <button class="btn-cancel" id="btnCancel">Cancel</button>
+        </div>
+        
+        <!-- Advanced Detail Controls -->
+        <div class="detail-controls" id="detailControls">
+            <div class="detail-slider-group">
+                <div class="detail-slider-header">
+                    <span>Fuerza de Enfoque</span>
+                    <span id="sharpenVal">30%</span>
+                </div>
+                <input type="range" class="detail-slider" id="sharpenSlider" min="0" max="100" value="30">
+            </div>
+            <div class="detail-slider-group">
+                <div class="detail-slider-header">
+                    <span>Textura / Grano</span>
+                    <span id="grainVal">15%</span>
+                </div>
+                <input type="range" class="detail-slider" id="grainSlider" min="0" max="100" value="15">
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div class="error-msg" id="errorMsg"></div>
+
+        <!-- Progress -->
+        <div class="progress-section" id="progressSection">
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-info">
+                <span class="progress-counter" id="progressCounter">Image <span>0</span> / 0</span>
+                <span class="progress-pct" id="progressPct">0%</span>
+            </div>
+            <div class="progress-filename" id="progressFilename">Preparing...</div>
+        </div>
+
+        <!-- Results Grid -->
+        <div class="results-grid" id="resultsGrid"></div>
+
+        <!-- Download All -->
+        <div class="download-all-bar" id="downloadAllBar">
+            <button class="btn-download-all" id="btnDownloadAll">Download All (ZIP)</button>
+            <button class="btn-clear" id="btnClear">Clear All</button>
+        </div>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const btnUpscale = document.getElementById('btnUpscale');
+        const btnCancel = document.getElementById('btnCancel');
+        const fileList = document.getElementById('fileList');
+        const batchSummary = document.getElementById('batchSummary');
+        const progressSection = document.getElementById('progressSection');
+        const progressFill = document.getElementById('progressFill');
+        const progressCounter = document.getElementById('progressCounter');
+        const progressPct = document.getElementById('progressPct');
+        const progressFilename = document.getElementById('progressFilename');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const downloadAllBar = document.getElementById('downloadAllBar');
+        const errorMsg = document.getElementById('errorMsg');
+
+        let selectedFiles = [];
+        let selectedScale = 4;
+        let selectedMode = 'upscale';
+        let completedResults = [];
+        let isCancelled = false;
+        let currentAbortController = null;
+
+        // Mode buttons
+        const scaleGroup = document.getElementById('scaleGroup');
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedMode = btn.dataset.mode;
+                // Hide scale selector when mode is colorize-only
+                scaleGroup.classList.toggle('hidden', selectedMode === 'colorize');
+                const detailControls = document.getElementById('detailControls');
+                if(detailControls) detailControls.classList.toggle('hidden', selectedMode === 'colorize');
+                // Update button text
+                const labels = { upscale: 'Upscale', colorize: 'Colorize', both: 'Colorize + Upscale' };
+                btnUpscale.textContent = labels[selectedMode];
+            });
+        });
+
+        // Scale buttons
+        document.querySelectorAll('.scale-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedScale = parseInt(btn.dataset.scale);
+            });
+        });
+
+        // Sliders
+        const sharpenSlider = document.getElementById('sharpenSlider');
+        const sharpenVal = document.getElementById('sharpenVal');
+        if (sharpenSlider) sharpenSlider.addEventListener('input', () => { sharpenVal.textContent = sharpenSlider.value + '%'; });
+
+        const grainSlider = document.getElementById('grainSlider');
+        const grainVal = document.getElementById('grainVal');
+        if (grainSlider) grainSlider.addEventListener('input', () => { grainVal.textContent = grainSlider.value + '%'; });
+
+        // Dropzone
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+        dropzone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropzone.classList.remove('drag-over');
+            addFiles(Array.from(e.dataTransfer.files));
+        });
+        fileInput.addEventListener('change', () => {
+            addFiles(Array.from(fileInput.files));
+            fileInput.value = '';
+        });
+
+        function addFiles(files) {
+            for (const f of files) {
+                if (!selectedFiles.some(s => s.name === f.name && s.size === f.size)) {
+                    selectedFiles.push(f);
+                }
+            }
+            renderFileList();
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+        }
+
+        function renderFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.classList.remove('visible');
+                batchSummary.textContent = '';
+                btnUpscale.classList.remove('ready');
+                return;
+            }
+
+            fileList.classList.add('visible');
+            btnUpscale.classList.add('ready');
+
+            const totalSize = selectedFiles.reduce((s, f) => s + f.size, 0);
+            batchSummary.textContent = `${selectedFiles.length} image${selectedFiles.length > 1 ? 's' : ''} selected (${(totalSize / 1024 / 1024).toFixed(1)} MB)`;
+
+            fileList.innerHTML = selectedFiles.map((f, i) => `
+                <div class="file-item" id="fileItem${i}">
+                    <div class="file-info">
+                        <span class="file-icon">#${i + 1}</span>
+                        <span class="file-name">${f.name}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="file-size">${(f.size / 1024).toFixed(0)} KB</span>
+                        <span class="file-status pending" id="fileStatus${i}">In queue</span>
+                        <button class="file-remove" onclick="removeFile(${i})">x</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showError(msg) { errorMsg.textContent = msg; errorMsg.classList.add('visible'); }
+        function hideError() { errorMsg.classList.remove('visible'); }
+
+        // Cancel handler
+        btnCancel.addEventListener('click', () => {
+            isCancelled = true;
+            if (currentAbortController) currentAbortController.abort();
+        });
+
+        function updateProgress(current, total, filename) {
+            const pct = Math.round((current / total) * 100);
+            progressFill.style.width = pct + '%';
+            progressCounter.innerHTML = `Image <span>${current}</span> / ${total}`;
+            progressPct.textContent = pct + '%';
+            progressFilename.textContent = filename || '';
+        }
+
+        // Upscale batch
+        btnUpscale.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            hideError();
+            isCancelled = false;
+
+            progressSection.classList.add('visible');
+            progressSection.classList.add('processing');
+            resultsGrid.classList.remove('visible');
+            downloadAllBar.classList.remove('visible');
+            resultsGrid.innerHTML = '';
+            completedResults = [];
+            btnUpscale.classList.remove('ready');
+            btnCancel.classList.add('visible');
+
+            // Disable remove buttons
+            document.querySelectorAll('.file-remove').forEach(b => b.style.display = 'none');
+
+            const total = selectedFiles.length;
+            let done = 0;
+
+            updateProgress(0, total, 'Starting...');
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                if (isCancelled) {
+                    // Mark remaining as cancelled
+                    for (let j = i; j < selectedFiles.length; j++) {
+                        const s = document.getElementById(`fileStatus${j}`);
+                        if (s) { s.textContent = 'Cancelled'; s.className = 'file-status cancelled'; }
+                    }
+                    break;
+                }
+
+                const statusEl = document.getElementById(`fileStatus${i}`);
+                if (statusEl) {
+                    statusEl.textContent = `Processing... (${i + 1}/${total})`;
+                    statusEl.className = 'file-status processing';
+                }
+
+                updateProgress(i, total, selectedFiles[i].name);
+
+                const formData = new FormData();
+                formData.append('file', selectedFiles[i]);
+                formData.append('scale', selectedScale);
+                formData.append('mode', selectedMode);
+                const sharpenSlider = document.getElementById('sharpenSlider');
+                const grainSlider = document.getElementById('grainSlider');
+                if (sharpenSlider) formData.append('sharpen_level', sharpenSlider.value);
+                if (grainSlider) formData.append('grain_level', grainSlider.value);
+
+                currentAbortController = new AbortController();
+
+                try {
+                    const resp = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData,
+                        signal: currentAbortController.signal
+                    });
+                    const data = await resp.json();
+
+                    if (data.results && data.results.length > 0) {
+                        const r = data.results[0];
+                        if (r.success) {
+                            if (statusEl) {
+                                statusEl.textContent = `Done (${r.time}s)`;
+                                statusEl.className = 'file-status done';
+                            }
+                            completedResults.push(r);
+                            addResultCard(r, selectedFiles[i]);
+                        } else {
+                            if (statusEl) {
+                                statusEl.textContent = 'Error';
+                                statusEl.className = 'file-status error';
+                            }
+                        }
+                    }
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        if (statusEl) { statusEl.textContent = 'Cancelled'; statusEl.className = 'file-status cancelled'; }
+                    } else {
+                        if (statusEl) { statusEl.textContent = 'Error'; statusEl.className = 'file-status error'; }
+                    }
+                }
+
+                done++;
+                updateProgress(done, total, '');
+            }
+
+            currentAbortController = null;
+            btnCancel.classList.remove('visible');
+
+            if (isCancelled) {
+                progressFilename.textContent = `Cancelled. ${completedResults.length}/${total} completed.`;
+            } else {
+                progressFilename.textContent = `All done! ${completedResults.length}/${total} images processed.`;
+            }
+            progressFill.style.width = '100%';
+            progressSection.classList.remove('processing');
+
+            setTimeout(() => {
+                progressSection.classList.remove('visible');
+                if (completedResults.length > 1) {
+                    downloadAllBar.classList.add('visible');
+                }
+                btnUpscale.classList.add('ready');
+            }, 2000);
+        });
+
+        function addResultCard(result, originalFile) {
+            resultsGrid.classList.add('visible');
+
+            const card = document.createElement('div');
+            card.className = 'result-item';
+
+            // Create object URL for original
+            const origUrl = URL.createObjectURL(originalFile);
+            const cardId = 'card_' + Math.random().toString(36).substr(2, 6);
+
+            card.innerHTML = `
+                <div class="result-item-header">
+                    <h4>${result.filename}</h4>
+                    <div class="result-item-meta">
+                        <span>${result.original_size} -> ${result.output_size}</span>
+                        <span>${result.scale}x</span>
+                        <span>${result.time}s</span>
+                    </div>
+                </div>
+                <div class="comparison-container">
+                    <div class="comparison-side" id="${cardId}_before" data-img-src="${origUrl}">
+                        <span class="comparison-tag before">Before</span>
+                        <img src="${origUrl}" alt="Before">
+                        <div class="magnifier" id="${cardId}_mag_before"></div>
+                        <span class="zoom-label">3x zoom</span>
+                    </div>
+                    <div class="comparison-side" id="${cardId}_after" data-img-src="${result.download}">
+                        <span class="comparison-tag after">After</span>
+                        <img src="${result.download}" alt="After">
+                        <div class="magnifier" id="${cardId}_mag_after"></div>
+                        <span class="zoom-label">3x zoom</span>
+                    </div>
+                </div>
+                <div class="result-actions">
+                    <a class="btn-dl-single" href="${result.download}" download>Download</a>
+                </div>
+            `;
+
+            resultsGrid.appendChild(card);
+
+            // Initialize magnifiers
+            setTimeout(() => {
+                initMagnifier(`${cardId}_before`, `${cardId}_mag_before`, origUrl);
+                initMagnifier(`${cardId}_after`, `${cardId}_mag_after`, result.download);
+            }, 100);
+        }
+
+        function initMagnifier(containerId, magId, imgSrc) {
+            const container = document.getElementById(containerId);
+            const mag = document.getElementById(magId);
+            if (!container || !mag) return;
+
+            const img = container.querySelector('img');
+            const zoom = 3;
+            const magSize = 150;
+
+            container.addEventListener('mousemove', (e) => {
+                const rect = container.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Position magnifier centered on cursor
+                mag.style.left = (x - magSize / 2) + 'px';
+                mag.style.top = (y - magSize / 2) + 'px';
+
+                // Calculate background position
+                const imgW = img.naturalWidth;
+                const imgH = img.naturalHeight;
+                const displayW = img.offsetWidth;
+                const displayH = img.offsetHeight;
+
+                const bgW = displayW * zoom;
+                const bgH = displayH * zoom;
+
+                const bgX = -(x * zoom - magSize / 2);
+                const bgY = -(y * zoom - magSize / 2);
+
+                mag.style.backgroundImage = `url('${imgSrc}')`;
+                mag.style.backgroundSize = `${bgW}px ${bgH}px`;
+                mag.style.backgroundPosition = `${bgX}px ${bgY}px`;
+            });
+
+            container.addEventListener('mouseleave', () => {
+                mag.style.display = 'none';
+            });
+            container.addEventListener('mouseenter', () => {
+                mag.style.display = 'block';
+            });
+        }
+
+        // Download All ZIP
+        document.getElementById('btnDownloadAll').addEventListener('click', async () => {
+            const files = completedResults.map(r => r.download.split('/').pop());
+            const resp = await fetch('/download-zip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files }),
+            });
+            if (resp.ok) {
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'upscaled_images.zip';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        });
+
+        // Clear
+        document.getElementById('btnClear').addEventListener('click', () => {
+            selectedFiles = [];
+            completedResults = [];
+            resultsGrid.innerHTML = '';
+            resultsGrid.classList.remove('visible');
+            downloadAllBar.classList.remove('visible');
+            renderFileList();
+        });
+    </script>
+</body>
+</html>

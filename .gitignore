@@ -1,0 +1,22 @@
+# Entorno virtual y caché de Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Modelos pesados, entradas y salidas locales
+models/
+outputs/
+uploads/
+
+# Variables de entorno y logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
