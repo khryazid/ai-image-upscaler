@@ -10,7 +10,7 @@ Una app local que usa inteligencia artificial (Real-ESRGAN) para aumentar el tam
 
 ### Opcion 1: Doble clic (recomendado)
 
-1. Ve a la carpeta `c:\Users\Khris\dev\Resize`
+1. Ve a la carpeta del proyecto (`ai-image-upscaler` / `Resize`)
 2. Haz doble clic en **`iniciar.bat`**
 3. Se abrira una ventana negra con el mensaje del servidor
 4. Abre tu navegador en: **http://127.0.0.1:5000**
@@ -18,7 +18,7 @@ Una app local que usa inteligencia artificial (Real-ESRGAN) para aumentar el tam
 ### Opcion 2: Desde terminal
 
 ```
-cd c:\Users\Khris\dev\Resize
+cd ai-image-upscaler
 venv\Scripts\python app.py
 ```
 

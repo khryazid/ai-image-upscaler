@@ -37,3 +37,7 @@ Por tamaño (>100 MB), la carpeta `models/` no se versiona en GitHub.
 venv\Scripts\python app.py
 ```
 Luego abre **http://127.0.0.1:5000**.
+
+## Licencia
+
+Distribuido bajo la licencia [MIT](LICENSE).
